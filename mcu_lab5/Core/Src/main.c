@@ -56,9 +56,9 @@ UART_HandleTypeDef huart1;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_ADC1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -69,11 +69,13 @@ static void MX_USART1_UART_Init(void);
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	if(huart->Instance == USART1){
 		// process recevied character
-		//HAL_UART_Transmit(&huart1, &temp, 1, 50);
 		if (index_buffer >= MAX_BUFFER_SIZE) {
 			ERROR_CODE_G = BUFFER_IS_FULL;
+			buffer_flag = 1;
+			HAL_UART_Receive_IT(&huart1, &temp, 1);
 			return;
 		}
+
 		switch (temp) {
 			case ' ':
 				break;
@@ -91,6 +93,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 		HAL_UART_Receive_IT(&huart1, &temp, 1);
   }
 }
+
 /* USER CODE END 0 */
 
 /**
@@ -121,14 +124,14 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_ADC1_Init();
   MX_TIM2_Init();
   MX_USART1_UART_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   HAL_ADC_Start(&hadc1);
   HAL_TIM_Base_Start_IT(&htim2);
 
-  HAL_UART_Receive(&huart1, &temp, 1, 1000);
+  HAL_UART_Receive(&huart1, &temp, 1, 10);
   HAL_UART_Receive_IT(&huart1, &temp, 1);
 
   /* USER CODE END 2 */
@@ -136,21 +139,13 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   setTimer1(10);
-//  uint32_t ADC_value = 0;
-  char str[50];
   while (1)
   {
-//	  HAL_GPIO_TogglePin ( LED_RED_GPIO_Port , LED_RED_Pin);
-//	  ADC_value = HAL_ADC_GetValue(&hadc1);
-//	  printf("!ADC=%d#\r\n", ADC_value);
-//	  HAL_UART_Transmit (&huart1 , ( void *) str , sprintf ( str , "%lu\n"
-//	  , ADC_value ) , 1000) ;
 	  if (buffer_flag == 1) {
 		  command_parser_fsm();
 		  buffer_flag = 0;
 	  }
 	  uart_communication_fsm();
-	  HAL_Delay(500);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -333,10 +328,21 @@ static void MX_GPIO_Init(void)
   GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LED_RED_GPIO_Port, LED_RED_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : PC13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LED_RED_Pin */
   GPIO_InitStruct.Pin = LED_RED_Pin;

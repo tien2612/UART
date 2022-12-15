@@ -9,6 +9,7 @@
 #include "stdio.h"
 #include "software_timer.h"
 #include "stdbool.h"
+#include "global.h"
 
 #ifndef INC_UART_COMMUNICATION_H_
 #define INC_UART_COMMUNICATION_H_
@@ -27,7 +28,6 @@
 #define MAX_BUFFER_SIZE 30
 extern uint8_t temp;
 extern uint8_t buffer [MAX_BUFFER_SIZE];
-extern uint8_t index_buffer;
 extern uint8_t buffer_flag;
 
 extern uint8_t ERROR_CODE_G;
@@ -36,13 +36,10 @@ extern int status_ACK;
 extern const char userRequest[];
 extern const char userOK[];
 
-extern uint32_t ADC_value;
-
 void command_parser_fsm();
 
 void uart_communication_fsm();
 
-void error_notify();
+void error_hanlder();
 
-void System_Go_To_Sleep();
 #endif /* INC_UART_COMMUNICATION_H_ */
