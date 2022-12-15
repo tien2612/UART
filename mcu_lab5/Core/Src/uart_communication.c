@@ -8,8 +8,6 @@
 
 #include "uart_communication.h"
 
-extern ADC_HandleTypeDef hadc1;
-
 int status_ACK = 0;
 bool startWaitingUser = false;
 
@@ -27,6 +25,8 @@ uint8_t ERROR_CODE_G = NORMAL;
 char str[50];
 
 extern UART_HandleTypeDef huart1;
+extern ADC_HandleTypeDef hadc1;
+
 void reset_buffer() {
 	for (int i = 0; i < MAX_BUFFER_SIZE; i++) {
 		buffer[i] = 0;
@@ -40,77 +40,94 @@ void command_parser_fsm() {
 		case 1:
 		case 2:
 		case 3:
-			ERROR_CODE_G = CMD_NOT_EXIST;
+			ERROR_CODE_G = CMD_NOT_FOUND;
+			status_ACK = ERROR_G;
 			break;
 		case 4: // user done communicate with command !OK#
 			if (strcmp((const char *)buffer, userOK) == 0) {
-					HAL_UART_Transmit(&huart1, (uint8_t*)str,
-							sprintf(str, "%s","cmd 'OK' detected\r\n"), 1000);
+					if (status_ACK != WAIT_ACK) {
+						ERROR_CODE_G = REQUEST_DATA_FIRST;
+						status_ACK = ERROR_G;
+						break;
+					}
+//					HAL_UART_Transmit(&huart1, (uint8_t*)str,
+//							sprintf(str, "%s","\r\nCMD 'OK' DETECTED\r\n"), 1000);
 
 					status_ACK = END_SEND;
 					ERROR_CODE_G = NORMAL;
+			} else {
+				status_ACK = ERROR_G;
+				ERROR_CODE_G = CMD_NOT_FOUND;
 			}
 			break;
 		case 5: // user request command !RST#
 			if (strcmp((const char *)buffer, userRequest) == 0) {
-					HAL_UART_Transmit(&huart1, (uint8_t*)str,
-						sprintf(str, "%s","cmd 'RST' detected\r\n"), 1000);
+
+//					HAL_UART_Transmit(&huart1, (uint8_t*)str,
+//						sprintf(str, "%s","\r\nCMD 'RST' DETECTED\r\n"), 1000);
 					ADC_value = HAL_ADC_GetValue(&hadc1);
 
 					status_ACK = SEND_ADC;
 					setTimer1(10);
 					ERROR_CODE_G = NORMAL;
+			} else {
+				status_ACK = ERROR_G;
+				ERROR_CODE_G = CMD_NOT_FOUND;
 			}
-
 			break;
 		default:
 			if (index_buffer < MAX_BUFFER_SIZE)
-				ERROR_CODE_G = CMD_NOT_EXIST;
-			else ERROR_CODE_G = BUFFER_IS_FULL;
+				ERROR_CODE_G = CMD_NOT_FOUND;
+			else
+				ERROR_CODE_G = BUFFER_IS_FULL;
+
+			status_ACK = ERROR_G;
 			break;
 
 	}
-	error_hanlder();
+
 	reset_buffer();
 }
 
 void uart_communication_fsm() {
 	switch(status_ACK) {
-		case IDE_MODE:
+		case SLEEP_MODE:
+			System_Go_To_Sleep();
 			break;
 		case SEND_ADC:
-				status_ACK = WAIT_ACK;
 				HAL_UART_Transmit(&huart1, (uint8_t*)str,
 					sprintf(str,"!ADC=%lu#\r\n", ADC_value), 1000);
-//				printf("!ADC=%lu#\r\n", ADC_value);
+
 				reset_buffer();
 				setTimer1(TIME_OUT_ACK);
+				status_ACK = WAIT_ACK;
 			break;
 		case WAIT_ACK:
 			if (timer1_flag == 1) {
+				try_times++;
+				HAL_UART_Transmit(&huart1, (uint8_t*)str,
+					sprintf(str, "!ADC=%lu#\r\n", ADC_value), 1000);
 				if (try_times >= MAX_TRY_TIMES) {
-					startWaitingUser = false;
 					HAL_UART_Transmit(&huart1, (uint8_t*)str,
-						sprintf(str, "%s","MAX TRY TIMES REACHED\r\n"), 1000);
-					status_ACK = END_SEND;
-					break;
-				} else {
-					try_times++;
-					HAL_UART_Transmit(&huart1, (uint8_t*)str,
-						sprintf(str, "!ADC=%lu#\r\n", ADC_value), 1000);
-				}
+						sprintf(str, "%s","\r\nREACHED MAXIMUM TRY TIMES\r\n"), 1000);
 
-				setTimer1(TIME_OUT_ACK);
+					status_ACK = END_SEND;
+					return;
+				} else setTimer1(TIME_OUT_ACK);
 				reset_buffer();
 			}
 			break;
 		case END_SEND:
-			status_ACK = IDE_MODE;
 			HAL_UART_Transmit(&huart1, (uint8_t*)str,
-				sprintf(str, "%s","USER RESPONDED OR REACHED MAX TIMES TRY\r\n"), 1000);
+				sprintf(str, "%s","\r\nSTOP SENDING DATA\r\n"), 1000);
 
 			try_times = 0;
 			reset_buffer();
+			status_ACK = SLEEP_MODE;
+			break;
+		case ERROR_G:
+			error_hanlder();
+			status_ACK = SLEEP_MODE;
 			break;
 	}
 
@@ -123,14 +140,26 @@ void error_hanlder() {
 		case BUFFER_IS_FULL:
 			HAL_UART_Transmit(&huart1, (uint8_t*)str,
 				sprintf(str, "%s","\r\nERROR: BUFFER IS FULL\r\n"), 1000);
-
+			ERROR_CODE_G = NORMAL;
 			break;
-		case CMD_NOT_EXIST:
+		case CMD_NOT_FOUND:
 			HAL_UART_Transmit(&huart1, (uint8_t*)str,
-				sprintf(str, "%s","\r\nERROR: COMMAND NOT EXIST\r\n"), 1000);
+				sprintf(str, "%s","\r\nERROR: COMMAND NOT FOUND\r\n"), 1000);
+			ERROR_CODE_G = NORMAL;
+			break;
 
+		case REQUEST_DATA_FIRST:
+			HAL_UART_Transmit(&huart1, (uint8_t*)str,
+				sprintf(str, "%s","\r\nERROR: DATA MUST BE REQUESTED FIRST\r\n"), 1000);
+			ERROR_CODE_G = NORMAL;
 			break;
 		default:
 			break;
 	}
+}
+
+void System_Go_To_Sleep() {
+	HAL_SuspendTick();
+	HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+	HAL_ResumeTick();
 }

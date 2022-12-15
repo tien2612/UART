@@ -1,4 +1,5 @@
 uart_communication.c:30:6:reset_buffer	16	static
 uart_communication.c:37:6:command_parser_fsm	8	static
-uart_communication.c:77:6:uart_communication_fsm	8	static
-uart_communication.c:119:6:error_hanlder	8	static
+uart_communication.c:92:6:uart_communication_fsm	8	static
+uart_communication.c:136:6:error_hanlder	8	static
+uart_communication.c:161:6:System_Go_To_Sleep	8	static
