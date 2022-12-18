@@ -36,13 +36,6 @@ void reset_buffer() {
 
 void command_parser_fsm() {
 	switch(index_buffer) {
-		case 0:
-		case 1:
-		case 2:
-		case 3:
-			ERROR_CODE_G = CMD_NOT_FOUND;
-			status_ACK = ERROR_G;
-			break;
 		case 4: // user done communicate with command !OK#
 			if (strcmp((const char *)buffer, userOK) == 0) {
 					if (status_ACK != WAIT_ACK) {
@@ -76,7 +69,7 @@ void command_parser_fsm() {
 			}
 			break;
 		default:
-			if (index_buffer < MAX_BUFFER_SIZE)
+			if (index_buffer <= MAX_BUFFER_SIZE)
 				ERROR_CODE_G = CMD_NOT_FOUND;
 			else
 				ERROR_CODE_G = BUFFER_IS_FULL;
@@ -136,6 +129,7 @@ void uart_communication_fsm() {
 void error_hanlder() {
 	switch (ERROR_CODE_G) {
 		case NORMAL:
+			System_Go_To_Sleep();
 			break;
 		case BUFFER_IS_FULL:
 			HAL_UART_Transmit(&huart1, (uint8_t*)str,
